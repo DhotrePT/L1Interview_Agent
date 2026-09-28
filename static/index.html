@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>L1 Interview Agent - Python</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
+<link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+
+<!-- Floating camera preview, pinned top-right once the interview starts -->
+<div id="camera-dock" class="camera-dock hidden">
+  <video id="dock-video" autoplay muted playsinline></video>
+  <div class="dock-bar">
+    <span id="rec-dot" class="rec-dot"></span>
+    <span id="rec-label">REC</span>
+    <span id="mic-meter" class="mic-meter"><i></i></span>
+  </div>
+  <div class="dock-bar proctor-bar">
+    <span>PROCTORED</span>
+    <span id="violation-chip" class="violation-chip">0 flags</span>
+  </div>
+</div>
+
+<!-- Shown whenever the candidate leaves fullscreen during the interview -->
+<div id="fullscreen-gate" class="overlay hidden">
+  <div class="overlay-card">
+    <h2>Interview paused</h2>
+    <p>This interview must run in fullscreen. Leaving fullscreen, switching tabs or opening
+       another window is recorded as suspicious activity.</p>
+    <p class="muted small">The clock is still running.</p>
+    <button id="resume-fullscreen" class="primary">Return to fullscreen and continue</button>
+  </div>
+</div>
+
+<!-- Escalation alarm -->
+<div id="alarm" class="overlay alarm hidden">
+  <div class="overlay-card">
+    <div class="alarm-icon">&#9888;</div>
+    <h2>Suspicious activity detected</h2>
+    <p id="alarm-reason"></p>
+    <p id="alarm-count" class="alarm-count"></p>
+    <button id="alarm-ack" class="primary">I understand - resume interview</button>
+  </div>
+</div>
+
+<main class="shell">
+
+  <!-- ================= STAGE 1: LOGIN ================= -->
+  <section id="stage-login" class="stage active">
+    <div class="card narrow">
+      <div class="brand">
+        <span class="logo">AA</span>
+        <div>
+          <h1>L1 Interview Agent</h1>
+          <p class="muted">Automated screening &middot; recorded &middot; proctored</p>
+        </div>
+      </div>
+
+      <h2>Sign in</h2>
+      <p class="muted">Use the email address you applied with. It carries your application
+        history and your scorecards.</p>
+
+      <label for="email">Email address</label>
+      <input id="email" type="email" placeholder="you@example.com" autocomplete="email" />
+
+      <label for="full-name">Full name <span class="muted">(optional)</span></label>
+      <input id="full-name" type="text" placeholder="Jane Doe" autocomplete="name" />
+
+      <p id="login-error" class="error hidden"></p>
+      <button id="login-btn" class="primary">Continue</button>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2: DASHBOARD ================= -->
+  <section id="stage-dashboard" class="stage">
+    <div class="topbar">
+      <div>
+        <h1>Your dashboard</h1>
+        <p class="muted small" id="dash-email"></p>
+      </div>
+      <button id="logout-btn" class="secondary">Log out</button>
+    </div>
+
+    <div class="card">
+      <h2>Your applications</h2>
+      <p class="muted small">Every interview you have taken, with its score.</p>
+      <div id="attempts-body"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h2>Open positions</h2>
+      <p class="muted small">Pick a post to start its 30-minute L1 interview.</p>
+      <div id="posts-body" class="posts"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3: DEVICE CHECK ================= -->
+  <section id="stage-devices" class="stage">
+    <div class="card">
+      <button id="back-to-dash-1" class="linkish">&larr; Back to dashboard</button>
+      <h2>Step 1 of 3 &middot; Camera and microphone check</h2>
+      <p class="muted" id="device-job-line"></p>
+
+      <div class="device-grid">
+        <div class="preview-box">
+          <video id="preview-video" autoplay muted playsinline></video>
+          <div id="preview-placeholder" class="preview-placeholder">Camera preview</div>
+        </div>
+
+        <div class="device-status">
+          <div class="status-row" id="row-camera">
+            <span class="status-dot"></span>
+            <div>
+              <strong>Camera</strong>
+              <div class="muted small" id="camera-detail">Not checked yet</div>
+            </div>
+          </div>
+
+          <div class="status-row" id="row-mic">
+            <span class="status-dot"></span>
+            <div>
+              <strong>Microphone</strong>
+              <div class="muted small" id="mic-detail">Not checked yet</div>
+              <div class="level"><i id="level-fill"></i></div>
+              <div class="muted small">Speak - the bar should move.</div>
+            </div>
+          </div>
+
+          <p id="device-error" class="error hidden"></p>
+          <button id="device-btn" class="primary">Enable camera &amp; microphone</button>
+          <button id="device-next" class="primary hidden">Connection successful - continue</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4: JOB DESCRIPTION ================= -->
+  <section id="stage-jd" class="stage">
+    <div class="card">
+      <h2>Step 2 of 3 &middot; The role you are interviewing for</h2>
+      <div id="jd-body" class="jd"></div>
+
+      <div class="rules">
+        <h3>Interview rules</h3>
+        <ul>
+          <li>The interview runs <strong>fullscreen</strong> and is recorded end to end.</li>
+          <li>Switching tabs or windows, leaving fullscreen, copying or pasting are all
+              recorded as suspicious activity.</li>
+          <li>You are warned on screen at <strong id="rule-alarm">3</strong> flags; at
+              <strong id="rule-terminate">6</strong> the interview ends automatically and the
+              attempt is marked for review.</li>
+          <li>Keep your face in the camera and explain every answer out loud.</li>
+        </ul>
+      </div>
+
+      <label class="confirm">
+        <input type="checkbox" id="jd-check" />
+        <span>I have read the job description and the interview rules, and I confirm I am
+              interviewing for this role.</span>
+      </label>
+      <button id="jd-btn" class="primary" disabled>Confirm and start the interview</button>
+      <p class="muted small">The 30-minute timer, the recording and the proctor start as soon
+         as you click, and the screen goes fullscreen.</p>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5: INTERVIEW ================= -->
+  <section id="stage-interview" class="stage">
+    <div class="interview-top">
+      <div class="progress-dots" id="progress-dots"></div>
+      <div class="timer" id="timer">30:00</div>
+    </div>
+
+    <div class="card question-card">
+      <div class="q-head">
+        <span class="badge" id="q-type">INTRO</span>
+        <h2 id="q-title">Question</h2>
+        <span class="muted small" id="q-meta"></span>
+      </div>
+      <pre class="q-prompt" id="q-prompt"></pre>
+
+      <div id="answer-block">
+        <label for="answer-text" id="answer-label">Your answer</label>
+        <textarea id="answer-text" rows="7" placeholder="Type your answer here..."></textarea>
+      </div>
+
+      <div id="code-block" class="hidden">
+        <label for="code-area">Your Python code</label>
+        <textarea id="code-area"></textarea>
+        <div class="code-actions">
+          <button id="run-btn" class="secondary">Run code</button>
+          <span class="muted small">Runs your code with Python 3 and shows the output.</span>
+        </div>
+        <pre id="code-output" class="code-output hidden"></pre>
+      </div>
+
+      <div class="explain-block">
+        <label for="explain-text">Explain your answer out loud</label>
+        <p class="muted small">
+          Click <strong>Start explaining</strong> and talk through your answer. Your speech is
+          transcribed below - you can correct the text. This is scored.
+        </p>
+        <div class="explain-actions">
+          <button id="speak-btn" class="secondary">Start explaining</button>
+          <span id="speak-status" class="muted small"></span>
+        </div>
+        <textarea id="explain-text" rows="4" placeholder="Transcript of your explanation appears here..."></textarea>
+      </div>
+
+      <div class="nav-actions">
+        <button id="prev-btn" class="secondary">Previous</button>
+        <span id="save-state" class="muted small"></span>
+        <button id="next-btn" class="primary">Save &amp; next</button>
+        <button id="submit-btn" class="primary hidden">Finish interview</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6: SCORECARD ================= -->
+  <section id="stage-result" class="stage">
+    <div class="card">
+      <div id="scoring-spinner">
+        <h2>Generating your scorecard...</h2>
+        <p class="muted">Your answers, code and explanations are being reviewed. This takes a moment.</p>
+        <div class="spinner"></div>
+      </div>
+      <div id="scorecard" class="hidden"></div>
+      <div id="result-actions" class="result-actions hidden">
+        <button id="back-to-dash-2" class="secondary">Back to dashboard</button>
+        <button id="exit-btn" class="primary">Exit and log out</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
