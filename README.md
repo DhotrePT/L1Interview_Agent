@@ -167,14 +167,48 @@ that.
 | GET | `/api/session/{id}/recording` | Download the .webm. |
 | GET | `/api/sessions` | Recruiter view: every attempt by everyone. |
 
+## Deployment
+
+The app needs **one long-lived process with a persistent disk**. Sessions, answers and
+video recordings are files under `DATA_DIR`, and a single interview spans dozens of
+requests over 30 minutes.
+
+That rules out serverless platforms including Vercel, Netlify Functions and Lambda: their
+filesystems are read-only apart from an ephemeral `/tmp`, and consecutive requests land on
+different instances, so an interview would lose its session part-way through. `app/config.py`
+also creates its data directories at import time, which fails outright on a read-only bundle.
+
+[`render.yaml`](render.yaml) is a ready blueprint for [Render](https://render.com):
+
+1. Push this repo to GitHub.
+2. Render → **New → Blueprint** → pick the repo. It reads `render.yaml`.
+3. Set `ANTHROPIC_API_KEY` (and ideally `ALLOWED_EMAIL_DOMAINS`) in the dashboard —
+   they are marked `sync: false` so they never live in git.
+4. Deploy. Health check is `GET /api/config`.
+
+The blueprint mounts a 5 GB disk at `/var/data` and points `DATA_DIR` and `RUN_TMP_DIR` at
+it. A disk requires a paid instance type; on the free tier the service also sleeps when
+idle, which will drop an interview in progress.
+
+Railway, Fly.io, Azure App Service or any Docker host work the same way — set `HOST=0.0.0.0`,
+point `DATA_DIR` at a mounted volume, and provide `ANTHROPIC_API_KEY`.
+
+**Read "Known limits" below before putting this on a public URL.** Three things there are
+deployment blockers, not nice-to-haves: there is no real authentication, `GET /api/sessions`
+exposes every candidate's scorecard to anyone, and `/run-code` executes candidate-supplied
+Python on your server.
+
 ## Known limits (deliberate, for this version)
 
 - **No authentication beyond the email.** Anyone with the URL can claim any email address
   and see that candidate's history. Add a magic link or SSO before external use — this is
   the most important gap.
-- **`/run-code` is not a hardened sandbox.** It runs candidate code as a subprocess with
-  `-I` and a timeout — fine for a trusted, supervised machine; not safe on a public URL.
-  Move it into Docker/nsjail before hosting this externally.
+- **`/run-code` is not a hardened sandbox.** It runs candidate code as a real subprocess
+  with `-I`, an empty `PATH`, a scrubbed environment and an 8-second timeout. The scrubbing
+  matters: without it a candidate could `print(os.environ)` and read `ANTHROPIC_API_KEY`
+  straight off the server. What remains is still a real process on your host — it can use
+  CPU and memory, and reach the network. Move it into Docker/nsjail before exposing this
+  to candidates you do not trust.
 - **Speech transcription is browser-side** (Web Speech API, Chrome/Edge only) and the
   candidate can edit the text before it is scored. The audio is in the recording either way;
   swap in server-side transcription for a tamper-proof version.

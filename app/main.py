@@ -1,6 +1,7 @@
 """L1 Interview Agent - FastAPI backend."""
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -367,6 +368,29 @@ def report_violation(session_id: str, payload: ViolationRequest) -> dict[str, An
     }
 
 
+# Candidate code must not inherit our process environment - ANTHROPIC_API_KEY
+# lives there. Keep only the handful of variables CPython needs to start, so a
+# snippet like `print(os.environ)` returns nothing of ours.
+_ENV_KEYS_CANDIDATE_CODE_MAY_SEE = (
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "PROCESSOR_ARCHITECTURE",
+    "NUMBER_OF_PROCESSORS",
+)
+
+
+def sandbox_env() -> dict[str, str]:
+    """A scrubbed environment for the candidate's subprocess."""
+    env = {k: os.environ[k] for k in _ENV_KEYS_CANDIDATE_CODE_MAY_SEE if k in os.environ}
+    # Empty PATH so the snippet cannot shell out to tools it happens to find.
+    env["PATH"] = ""
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return env
+
+
 @app.post("/api/session/{session_id}/run-code")
 def run_code(session_id: str, payload: RunCodeRequest) -> dict[str, Any]:
     """Runs the candidate's snippet in a short-lived subprocess so they can self-check."""
@@ -377,12 +401,13 @@ def run_code(session_id: str, payload: RunCodeRequest) -> dict[str, Any]:
         script = Path(workdir) / "candidate.py"
         script.write_text(payload.code, encoding="utf-8")
         try:
-            completed = subprocess.run(  # noqa: S603 - local single-user interview kiosk
+            completed = subprocess.run(  # noqa: S603 - scrubbed env, no PATH, hard timeout
                 [sys.executable, "-I", "-B", str(script)],
                 capture_output=True,
                 text=True,
                 timeout=CODE_RUN_TIMEOUT_SECONDS,
                 cwd=workdir,
+                env=sandbox_env(),
             )
         except subprocess.TimeoutExpired:
             return {

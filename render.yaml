@@ -1,0 +1,49 @@
+# Render blueprint - https://render.com/docs/blueprint-spec
+#
+# Why Render and not Vercel: this app keeps every interview session, answer and
+# video recording as files on disk, and a single interview spans dozens of
+# requests over 30 minutes. That needs one long-lived process with a disk that
+# survives restarts. Vercel's serverless functions have neither.
+#
+# The disk below requires a paid instance type. On the free tier the service
+# also sleeps after inactivity, which will drop an interview in progress.
+
+services:
+  - type: web
+    name: l1-interview-agent
+    runtime: python
+    plan: starter
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run.py
+    healthCheckPath: /api/config
+    autoDeploy: true
+
+    disks:
+      - name: interview-data
+        mountPath: /var/data
+        sizeGB: 5
+
+    envVars:
+      # Bind to every interface - Render routes to the container, not localhost.
+      - key: HOST
+        value: 0.0.0.0
+
+      # Sessions and recordings live on the mounted disk, not in the app
+      # directory, so a deploy or restart does not wipe them.
+      - key: DATA_DIR
+        value: /var/data/sessions
+      - key: RUN_TMP_DIR
+        value: /var/data/tmp
+
+      - key: PYTHON_VERSION
+        value: "3.13"
+
+      # sync: false = set the value in the Render dashboard. Never commit it.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # Strongly recommended once this is on a public URL: without it, anyone
+      # with a valid-looking email address can start an interview.
+      - key: ALLOWED_EMAIL_DOMAINS
+        sync: false

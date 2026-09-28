@@ -9,7 +9,10 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-DATA_DIR = BASE_DIR / "data" / "sessions"
+# Where interview sessions are stored. Override with DATA_DIR when the app runs
+# on a host whose app directory is read-only, and point it at a mounted disk -
+# sessions and recordings must survive a restart.
+DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data" / "sessions")))
 STATIC_DIR = BASE_DIR / "static"
 
 # Candidate code runs in a temp folder next to the app, not in the system temp
