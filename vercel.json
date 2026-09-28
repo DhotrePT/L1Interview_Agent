@@ -1,14 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index" }
-  ],
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 30,
-      "memory": 1024
-    }
-  },
   "env": {
     "DATA_DIR": "/tmp/l1-interview/sessions",
     "RUN_TMP_DIR": "/tmp/l1-interview/run",

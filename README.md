@@ -175,9 +175,15 @@ requests over 30 minutes.
 
 ### Vercel — works, but sessions do not survive
 
-[`vercel.json`](vercel.json) and [`api/index.py`](api/index.py) deploy the app to Vercel.
-`DATA_DIR` and `RUN_TMP_DIR` are pointed at `/tmp`, which is the only writable path in a
-serverless bundle — without that the app fails at import and every route returns 500.
+[`vercel.json`](vercel.json) deploys the app to Vercel. Vercel auto-detects the FastAPI
+app in [`app/main.py`](app/main.py) and serves every route through it, so no extra
+entrypoint or rewrite rule is needed — adding a `rewrites` rule actually *breaks* routing,
+because the app then receives the rewritten path instead of the real one and 404s on
+everything.
+
+`vercel.json` only sets `DATA_DIR` and `RUN_TMP_DIR` to paths under `/tmp`, the one writable
+location in a serverless bundle. Without them `app/config.py` tries to create its data
+directories inside the read-only deployment and the app dies at import.
 
 **Use this for demos, not for real interviews.** `/tmp` belongs to one function instance and
 is wiped when that instance is recycled. A single candidate on an idle project will usually
