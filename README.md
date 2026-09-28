@@ -1,10 +1,19 @@
 # L1 Interview Agent — automated Python screening
 
+- **Live demo:** https://l1-interview-agent.vercel.app
+- **Source:** https://github.com/DhotrePT/L1Interview_Agent
+
 A candidate logs in with their email, sees their application history and the open posts,
 picks one, passes a camera + microphone check, reads and confirms the job description, then
 answers **1 introduction + 3 theory + 3 coding questions in 30 minutes** — fullscreen,
 recorded and proctored — while explaining every answer out loud. Claude grades the session
 and produces a **scorecard out of 100**.
+
+> The live demo runs on Vercel without an API key, so it grades with the offline heuristic
+> rather than Claude, and its session store is temporary. Read
+> [Deployment](#deployment) and [Known limits](#known-limits-deliberate-for-this-version)
+> before using it for anything real. Use Chrome or Edge — the device check needs
+> `getUserMedia`.
 
 ## Quick start
 
@@ -145,7 +154,14 @@ that.
 | `PROCTOR_TERMINATE_AT` | `6` | Flags before the interview is ended automatically. |
 | `ALLOW_RETAKE` | `false` | Allow a second attempt at a post already completed. |
 | `CODE_RUN_TIMEOUT_SECONDS` | `8` | Kill limit for candidate code. |
+| `DATA_DIR` | `data/sessions` | Where sessions and recordings are written. Point this at a mounted disk when hosting. |
 | `RUN_TMP_DIR` | `data/tmp` | Where candidate code runs (kept off the system drive). |
+
+A variable that **exists but is empty counts as unset** and falls back to the default, and a
+non-numeric value for a numeric setting warns and uses the default rather than killing the
+process. This matters on hosted platforms: a dashboard-configured deployment routinely holds
+blank variables, `os.getenv` returns `""` for those rather than the default, and an
+`int("")` at import time takes the whole app down before it can serve a single request.
 
 ## API
 
@@ -173,7 +189,9 @@ The app needs **one long-lived process with a persistent disk**. Sessions, answe
 video recordings are files under `DATA_DIR`, and a single interview spans dozens of
 requests over 30 minutes.
 
-### Vercel — works, but sessions do not survive
+### Vercel — live, but sessions do not survive
+
+The demo at **https://l1-interview-agent.vercel.app** runs from this config.
 
 [`vercel.json`](vercel.json) deploys the app to Vercel. Vercel auto-detects the FastAPI
 app in [`app/main.py`](app/main.py) and serves every route through it, so no extra
