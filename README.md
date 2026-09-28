@@ -173,10 +173,23 @@ The app needs **one long-lived process with a persistent disk**. Sessions, answe
 video recordings are files under `DATA_DIR`, and a single interview spans dozens of
 requests over 30 minutes.
 
-That rules out serverless platforms including Vercel, Netlify Functions and Lambda: their
-filesystems are read-only apart from an ephemeral `/tmp`, and consecutive requests land on
-different instances, so an interview would lose its session part-way through. `app/config.py`
-also creates its data directories at import time, which fails outright on a read-only bundle.
+### Vercel — works, but sessions do not survive
+
+[`vercel.json`](vercel.json) and [`api/index.py`](api/index.py) deploy the app to Vercel.
+`DATA_DIR` and `RUN_TMP_DIR` are pointed at `/tmp`, which is the only writable path in a
+serverless bundle — without that the app fails at import and every route returns 500.
+
+**Use this for demos, not for real interviews.** `/tmp` belongs to one function instance and
+is wiped when that instance is recycled. A single candidate on an idle project will usually
+stay on one warm instance and get through fine, but nothing guarantees it: a cold start or a
+second concurrent candidate produces `404 session not found` part-way through an interview,
+and any recording collected so far is gone. Scorecards are lost the same way.
+
+To make Vercel genuinely safe you would move the session store off the filesystem — Vercel
+Postgres or KV for sessions, Blob for recordings — which means rewriting `app/storage.py`.
+Until then, prefer the Render blueprint below for anything that matters.
+
+### Render — the durable option
 
 [`render.yaml`](render.yaml) is a ready blueprint for [Render](https://render.com):
 
