@@ -58,11 +58,18 @@ ALLOWED_EMAIL_DOMAINS = [
 ]
 
 # --- Proctoring -------------------------------------------------------------
-# Suspicious events (tab switch, leaving fullscreen, paste, devtools keys...).
+# Suspicious events: tab switch, leaving fullscreen, paste, devtools keys, and
+# what the camera sees - a second face, an electronic device, the candidate
+# looking away, another voice in the room.
 # At ALARM_AT the candidate gets a full-screen alarm; at TERMINATE_AT the
 # interview ends automatically and the attempt is flagged.
-PROCTOR_ALARM_AT = env_int("PROCTOR_ALARM_AT", 3)
-PROCTOR_TERMINATE_AT = env_int("PROCTOR_TERMINATE_AT", 6)
+#
+# Keep ALARM_AT strictly below TERMINATE_AT. If they are equal the candidate is
+# terminated by the same flag that first warns them, with no chance to correct
+# course - at three strikes that is the difference between a warning and an
+# ambush.
+PROCTOR_ALARM_AT = env_int("PROCTOR_ALARM_AT", 2)
+PROCTOR_TERMINATE_AT = env_int("PROCTOR_TERMINATE_AT", 3)
 
 # May a candidate interview twice for the same post?
 ALLOW_RETAKE = os.getenv("ALLOW_RETAKE", "false").strip().lower() in {"1", "true", "yes"}

@@ -44,6 +44,14 @@ VIOLATION_TYPES = {
     "microphone_stopped": "Microphone stopped during the interview",
     "multiple_displays": "More than one display is connected",
     "window_resized": "Interview window was resized substantially",
+    # Reported by the camera watcher in static/js/proctor-vision.js. Each one
+    # needs sustained evidence in the browser before it is sent, so a glance
+    # down at the keyboard or someone walking past does not cost a strike.
+    "multiple_faces": "More than one person is visible on camera",
+    "no_face": "Candidate is not visible on camera",
+    "looking_away": "Looked away from the screen for a sustained period",
+    "electronic_device": "An electronic device is visible on camera",
+    "second_voice": "Another voice was heard while the candidate was not speaking",
 }
 
 app = FastAPI(title="L1 Interview Agent", version="2.0.0")

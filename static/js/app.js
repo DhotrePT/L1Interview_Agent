@@ -469,6 +469,25 @@ const proctor = {
     if (window.screen && window.screen.isExtended) {
       this.flag("multiple_displays", "An extended or second display is connected");
     }
+
+    this.startCameraWatch();
+  },
+
+  // Watches the camera for a second person, a device in frame, a sustained look
+  // away, or a voice that is not the candidate's. Best effort: if the models
+  // cannot load the interview carries on with DOM-event proctoring alone.
+  startCameraWatch() {
+    if (!window.proctorVision || !state.stream) return;
+    window.proctorVision
+      .start({
+        video: $("dock-video"),
+        stream: state.stream,
+        onFlag: (type, detail) => this.flag(type, detail),
+      })
+      .then((ok) => {
+        if (!ok) console.warn("Camera proctoring off:", window.proctorVision.reason);
+      })
+      .catch((err) => console.warn("Camera proctoring failed to start", err));
   },
 
   stop() {
@@ -477,6 +496,7 @@ const proctor = {
       target.removeEventListener(event, handler, options);
     }
     this.handlers = [];
+    if (window.proctorVision) window.proctorVision.stop();
     $("fullscreen-gate").classList.add("hidden");
     $("alarm").classList.add("hidden");
   },

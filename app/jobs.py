@@ -12,9 +12,15 @@ from typing import Any
 from .questions import CODING_BANKS, INTRO_QUESTION, THEORY_BANKS
 
 # Of the 3 theory and 3 coding questions in a paper, how many must be "easy".
-# This is an L1 screen for freshers: 2 easy + 1 medium per section keeps it fair
-# while still leaving one question that separates the stronger candidates.
-EASY_PER_SECTION = 2
+# This is an L1 screen for freshers, so all three are easy: the round is there to
+# confirm someone can actually write working Python, not to rank the strong
+# candidates against each other. Drop this to 2 to put one separating question
+# back in each section.
+#
+# Every bank holds at least 3 easy questions, so this quota is always satisfiable;
+# if a bank ever falls short the remainder is topped up from the harder pool
+# rather than failing.
+EASY_PER_SECTION = 3
 
 JOBS: list[dict[str, Any]] = [
     {

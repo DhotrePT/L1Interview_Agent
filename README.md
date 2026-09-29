@@ -64,8 +64,9 @@ notes — sent to Claude, **never** to the browser (the smoke test asserts this)
 ### Difficulty
 
 This is an L1 screen for freshers, so every question is tagged `"difficulty": "easy"` or
-`"medium"` (missing means medium), and **each paper is 2 easy + 1 medium in both the theory
-and the coding section** — set by `EASY_PER_SECTION` in [app/jobs.py](app/jobs.py). The plan
+`"medium"` (missing means medium), and **every question in a paper is easy** — set by
+`EASY_PER_SECTION` in [app/jobs.py](app/jobs.py), which defaults to 3 of the 3 questions in
+each section. Drop it to 2 to put one separating medium question back in each section. The plan
 decides *which bank* a question comes from; the quota decides *how hard* it is. Easy means
 FizzBuzz, counting vowels, filtering a list of dicts; medium means group-anagrams or a
 running total per group. Difficulty is a sampling hint only: it never reaches the browser
@@ -89,19 +90,48 @@ app does instead is make leaving expensive and visible:
   allows it), camera or mic stopping mid-interview, and a second display being connected.
 - Repeat events of the same kind inside 2 seconds count once, so one Alt-Tab is one flag,
   not three.
+- **The camera is watched too** — see below.
 - **The server owns the escalation**, not the browser: it counts the flags and decides.
-  At `PROCTOR_ALARM_AT` (default 3) the candidate gets a full-screen red alarm with a beep;
-  at `PROCTOR_TERMINATE_AT` (default 6) the interview ends immediately, is scored on
+  At `PROCTOR_ALARM_AT` (default 2) the candidate gets a full-screen red alarm with a beep;
+  at `PROCTOR_TERMINATE_AT` (default 3) the interview ends immediately, is scored on
   whatever exists, and the attempt is marked **terminated** and flagged on the dashboard.
 - Unknown event types are rejected, so a tampered client cannot invent flags.
+
+### What the camera watches
+
+[static/js/proctor-vision.js](static/js/proctor-vision.js) runs MediaPipe in the browser on
+the live feed and reports five further events:
+
+| Event | Fires when |
+|---|---|
+| `multiple_faces` | more than one face in frame for 2.5s |
+| `no_face` | nobody in frame for 8s |
+| `looking_away` | head turned past ~29° yaw or ~26° pitch for 5s |
+| `electronic_device` | a phone, tablet, laptop, TV or book detected for 2s |
+| `second_voice` | the microphone hears speech for 3s while the candidate's own mouth is shut |
+
+Two design rules matter here. **Every detector demands sustained evidence** — a glance at
+the keyboard, a flatmate crossing the room or a hand raised to the chin must not end an
+interview. And **one continuous violation costs one strike**, not a stream of them: after a
+report the same detector goes quiet for 30 seconds.
+
+This is best-effort. The models load from a CDN, and if they cannot — offline, CDN blocked,
+no WebGL, unsupported browser — the watcher disables itself, logs the reason, and the
+interview continues with DOM-event proctoring alone. A proctor that breaks the exam is worse
+than one that misses a cheat.
+
+The thresholds at the top of that file are deliberately conservative and **have not been
+calibrated against real recordings**. Tune them on your own footage before using camera
+flags to reject anyone, especially `looking_away`, which is the easiest to trip honestly.
 
 Flags are shown to the reviewer and given to Claude as context, but they **do not silently
 reduce the marks** — the work is scored on its merits and the pattern is called out in the
 summary. That split is deliberate: a human decides what a flag is worth.
 
-What it does **not** do: detect a phone, a second person in the room, a screen reader on
-another machine, or a candidate reading from a printout. For that you need webcam-based
-face/gaze analysis on the recording, which this does not have.
+What it still does **not** do: see anything outside the camera's field of view. A phone below
+the desk, a second screen off to one side, a person coaching from behind the laptop, or a
+printout taped beside the monitor are all invisible to it. `looking_away` is the only signal
+that hints at those, and it cannot tell you *what* the candidate looked at.
 
 ## Scoring
 
@@ -150,8 +180,8 @@ that.
 | `ALLOWED_EMAIL_DOMAINS` | empty (any) | e.g. `alignedautomation.com,gmail.com` |
 | `INTERVIEW_MINUTES` | `30` | Total interview time. |
 | `SCORING_MODEL` | `claude-opus-5` | Model used for grading. |
-| `PROCTOR_ALARM_AT` | `3` | Flags before the on-screen alarm. |
-| `PROCTOR_TERMINATE_AT` | `6` | Flags before the interview is ended automatically. |
+| `PROCTOR_ALARM_AT` | `2` | Flags before the on-screen alarm. |
+| `PROCTOR_TERMINATE_AT` | `3` | Flags before the interview is ended automatically. |
 | `ALLOW_RETAKE` | `false` | Allow a second attempt at a post already completed. |
 | `CODE_RUN_TIMEOUT_SECONDS` | `8` | Kill limit for candidate code. |
 | `DATA_DIR` | `data/sessions` | Where sessions and recordings are written. Point this at a mounted disk when hosting. |
